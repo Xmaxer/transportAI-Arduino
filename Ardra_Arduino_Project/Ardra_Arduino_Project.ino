@@ -14,6 +14,7 @@ const char* licence_plate = "00-XX-00000";
 
 unsigned long lastUpdate = 0;
 unsigned long lastCheck = 0;
+int status = 0;
 
 HttpRequest request("http://www.transport-ai.com/requests/ardra");
 
@@ -60,13 +61,16 @@ void updateLocation()
 
     int longLength = lng.length() + 1;
   char longChars[longLength];
-  lat.toCharArray(longChars, longLength);
+  lng.toCharArray(longChars, longLength);
 
+  request.getResponse().setOnJsonResponse(&onJsonReplyOrigin);
+  request.setOnSuccess(&onSuccessOrigin);
+  
   request.addParameter("latitude", latChars);
   request.addParameter("longitude", longChars);
   request.addParameter("code", "1");
   request.addParameter("car", licence_plate);
-  Internet.performPost(request);
+  Internet.performGet(request);
   request.deleteParameters();
 
   request.addParameter("latitude", latChars);
@@ -89,7 +93,7 @@ void checkForOrder()
 
 void confirmOrder()
 { 
-      request.addParameter("code", "3");
+  request.addParameter("code", "3");
   request.addParameter("car", licence_plate);
   Internet.performPost(request);
   request.deleteParameters();
@@ -105,9 +109,9 @@ void cancelOrder()
 
 void onJsonReply(JsonKeyChain & hell,char * output)
 {
-  Terminal.println(output);
+  status = atoi(output);
 
-  int status = atoi(output);
+  Terminal.println("Status: " + status);
 
   if(status == 1)
   {
@@ -118,7 +122,65 @@ void onJsonReply(JsonKeyChain & hell,char * output)
     cancelOrder();
   }
 }
+
 void onSuccess(HttpResponse & response)
 {
   response["grpc"]["fields"]["status"]["integer_value"].query();
+}
+
+void sendNotification()
+{
+  request.addParameter("code", "6");
+  request.addParameter("car", licence_plate);
+  Internet.performPost(request);
+  request.deleteParameters();
+
+}
+
+void onJsonReplyOrigin(JsonKeyChain & hell,char * output)
+{
+
+  int distance = atoi(output);
+
+  Terminal.println("Distance: " + distance);
+  
+  if(distance == -1)
+  {
+    return;
+  }
+  if(distance <= 30)
+  {
+    if(status == 2)
+    {
+      sendNotification();
+    }
+    else if(status == 3)
+    {
+      completeOrder();
+    }
+    
+  }
+
+}
+
+void completeOrder()
+{
+  request.addParameter("code", "7");
+  request.addParameter("car", licence_plate);
+  Internet.performPost(request);
+  request.deleteParameters(); 
+}
+
+void onSuccessOrigin(HttpResponse & response)
+{
+  Terminal.println("updated");
+  response["distance"].query();
+}
+
+void checkDestination()
+{
+  request.addParameter("code", "6");
+  request.addParameter("car", licence_plate);
+  Internet.performGet(request);
+  request.deleteParameters(); 
 }
